@@ -1,0 +1,342 @@
+---
+title: "QTL-seq分析报告"
+output: 
+    html_document:
+        toc: true
+        toc_float: true
+        number_sections: true
+---
+
+# 项目概述
+## 项目背景
+本项目主要利用QTL-seq[1]方法，基于二代高通量测序技术，通过对遗传分离群体（F2代或RIL群体）中两个极端性状混池子代和亲本进行全基因组重测序，通过计算两个子代样本相对于其中一亲本SNP位点的SNP-index值，找出两个子代混池SNP-index有明显差异的区域，最终对影响性状表型的区域进行初步定位。
+本项目样品信息如下：
+
+样品信息:  
+```{r echo = FALSE, results = 'asis'}
+library(knitr)
+dtable <- read.delim(file = "data/sample_info.xls", sep = '\t', header = T)
+kable(dtable)
+```
+
+
+## 实验及上机测序流程
+提取样本基因组 DNA，随机打断，电泳回收所需长度DNA片段，添加接头，进行文库构建，用Illumina NovaSeq进行Paired-End测序，得到原始测序数据(raw data)。
+
+![](include/qtl_seq_experienment_pipeline.png)
+
+<center>**测序实验流程图**</center>
+
+## 信息分析流程
+获得原始测序序列，经过滤和质控，得到后续分析所使用的数据。将两个亲本和两个子代混池样本比对到参考基因组，进行变异检测。依据以下标准选取候选位点：该位点两个亲本及子代混池测序深度均大于最低设定阈值、亲本间碱基型纯合并且不一致。在此过滤基础上，以其中一个亲本为参考，分别计算两个子代样本SNP-index（SNP index表示与参考基因组碱基型不一致的reads占总reads数的比值），将两个子代SNP-index均小于0.3的位点去掉，然后计算所有位点的ΔSNP-index（两个子代SNP-index的差值）；通过滑动窗口计算窗口内SNP位点的ΔSNP-index均值，结合模拟假设检验得到的95%和99%置信区间上下边界阈值，最终筛选得到与性状相关的候选区域，提取位于候选区域内的SNP位点，并对这些SNP位点进行注释，最终挑选引起起始或终止密码子突变、非同义突变或可变剪接位点所在的基因作为候选基因。
+
+<center>![](include/analysis_pipeline.jpg)</center>
+
+</br>
+<center>**信息分析流程图**</center>  
+
+# 数据过滤
+## 原始数据统计
+所有样品原始测序数据统计见下表
+
+<center>**原始数据统计**</center>
+```{r echo = FALSE, results = 'asis'}
+library(knitr)
+dtable <- read.delim(file = "data/raw_data_stat.txt", sep = '\t', header = T)
+kable(dtable)
+```
+
+```
+Sample_name: 样品名称；
+Total_reads: reads总数，双末端测序算作2条reads；
+Total_bases: 碱基总数；
+GC_content: GC含量；
+Q20: Phred 数值大于20的碱基占总体碱基的百分比；
+Q30: Phred 数值大于30的碱基占总体碱基的百分比。
+```
+
+## 有效数据统计
+原始下机数据会包括一些低质量、带接头的序列，为保证后续信息分析质量，需要对原始测序数据进行过滤。
+过滤标准如下：
+（1）去除reads尾端接头序列；    
+（2）去除reads中低质量的碱基；  
+过滤后，统计结果下表所示：  
+
+<center>**有效数据统计**</center>
+```{r echo = FALSE, results = 'asis'}
+library(knitr)
+dtable <- read.delim(file = "data/clean_data_stat.txt", sep = '\t', header = T)
+kable(dtable)
+```
+
+```
+Sample_name: 样品名称；
+Total_reads: reads总数，双末端测序算作2条reads；
+Total_bases: 碱基总数；
+GC_content: GC含量；
+Q20: Phred 数值大于20的碱基占总体碱基的百分比；
+Q30: Phred 数值大于30的碱基占总体碱基的百分比。
+```
+
+# 变异检测及候选区域鉴定
+## 样本比对结果统计
+利用 bwa[2] 软件将四组样品样本比对到参考基因组后，利用samtools[3]工具去除duplicate reads以及比对到多处的reads，只选取unique mapping reads为后续分析使用，四组样品比对统计结果如下。
+
+
+<center>**样品比对结果统计**</center>
+```{r echo = FALSE, results = 'asis'}
+library(knitr)
+dtable <- read.delim(file = "data/bam_stat.xls", sep = '\t', header = T)
+kable(dtable)
+```
+
+```
+Sample_name: 样品名称；
+ALLReads: 样本总reads数目；
+AllReadMap: 比对上参考基因组reads数（挑选map quality大于20）；
+UniqReadMap（去除掉duplicate reads后）: 唯一比对的reads数目。
+```
+
+## GC含量和测序深度统计
+**低值亲本**GC含量和测序深度分布见下图，其余样品测序深度图见附件文件夹”07.gc_depth_plot”。
+ 
+<center>**低值亲本GC含量和深度的分布情况**</center>
+ 
+![](img/parent_low_gc_depth.png)
+
+```
+以10Kb为窗口统计窗口内平均测序深度和GC含量百分比。
+```
+
+所有样本GC含量和深度的分布情况请查看下面链接：  
+[低值亲本](img/parent_low_gc_depth.pdf) | 
+[高值亲本](img/parent_high_gc_depth.pdf) |
+[低值混池](img/bulk_low_gc_depth.pdf) |
+[高值混池](img/bulk_high_gc_depth.pdf)
+ 
+<center>**低值亲本染色体测序深度图**</center>
+ 
+![](img/parent_low.depth.png)
+
+```
+以10kb为窗口，计算窗口平均测序深度。 
+```
+
+所有样本染色体测序深度图请查看下面链接：  
+[低值亲本](img/parent_low.depth.pdf) | 
+[高值亲本](img/parent_high.depth.pdf) |
+[低值混池](img/bulk_low.depth.pdf) |
+[高值混池](img/bulk_high.depth.pdf)
+
+
+## 变异检测结果统计
+过滤后得到的bam文件，利用Coval[4]软件中refine工具对位于InDel附近的reads进行重比对，并过滤掉mismatch数目大于10的reads；接下来利用Coval软件中的call工具，设置过滤标准(最小reads支持数大于3，和ref不一致频率大于0，碱基平均质量值大于20等)进行SNP和InDel 鉴定。
+
+<center>**变异检测统计结果**</center>
+```{r echo = FALSE, results = 'asis'}
+library(knitr)
+dtable <- read.delim(file = "data/indel_snp_number.xls", sep = '\t', header = T)
+kable(dtable)
+```
+
+**低值亲本**在主要染色体上变异检测结果统计如下表，其余三组样品SNP分布情况请见附件文件夹“08.snp_density”。
+<center>**低值亲本SNP结果统计**</center>
+```{r echo = FALSE, results = 'asis'}
+library(knitr)
+dtable <- read.delim(file = "data/parent_low_MSR_Cov_10_S-snp.xls", sep = '\t', header = T, check.names=F)
+kable(dtable)
+```
+
+```
+SNP(per/kb)为每1000bp所含SNP个数。
+```
+
+对于性状中四个样本，根据变异检测结果，对两个亲本进行如下条件过滤得到候选位点：  
+1）	将两个亲本中任意位点为缺失排除；  
+2）	将两个亲本中任意样本最低测序深度小于3位点排除；  
+3）	将两个亲本中任意样本为杂合位点排除；  
+4）	将两个亲本中一致位点排除。  
+
+在此过滤条件基础上，以**低值亲本**作为参考，计算两子代样本的SNP-index值（如果和**低值亲本**一致SNP-index为0），并按照如下条件进行候选位点进一步过滤：  
+1）将两个子代池中任意样本为缺失排除；  
+2）将两子代池中任意样本最低测序深度小于3位点排除；  
+3）将两个子代池中SNP-index均小于0.3位点排除；  
+
+最终筛选到可能与性状相关的SNP位点，SNP位点个数见下表：
+
+<center>**候选变异位点统计结果**</center>
+```{r echo = FALSE, results = 'asis'}
+library(knitr)
+dtable <- read.delim(file = "data/houxuan_snp_number.xls", sep = '\t', header = T)
+kable(dtable)
+```
+
+## 目标性状区域定位
+计算两个子代混池样本之间的ΔSNP-index（ΔSNP-index = SNP-index(混池1)  – SNP-index (混池2)），基于子代混池样本数和测序深度，进行10000次置换检验，最终选取95%和99%置信水平作为筛选的阈值[1]。
+以1M为窗口，每次滑动10kb，统计窗口内SNP位点的ΔSNP-index平均值绘图；其中ΔSNP-index分布如下图所示：
+ 
+ <center>**ΔSNP-index沿染色体分布图**</center>
+ 
+![](img/1M_snp_index.png)
+
+```
+蓝色位点表示SNP位点对应两个子代间ΔSNP-index值，红色线表示以滑动窗口方式计算下，该窗口内所有SNP位点ΔSNP-index平均值；绿色和橙色线分别代表95%水平下和99%下置信区间的上下边界；
+```
+
+1M, 2M, 4M 窗口Δsnp-index 绘图结果展示请查看下面连接：  
+[1M窗口](img/1M_snp_index.pdf)|
+[2M窗口](img/2M_snp_index.pdf)|
+[4M窗口](img/4M_snp_index.pdf)
+
+下面选取1M窗口，95%置信水平下超过阈值的连续区域作为候选区域；候选区域如下表所示：
+
+<center>**候选区域(部分)**</center>
+```{r echo = FALSE, results = 'asis'}
+library(knitr)
+dtable <- read.delim(file = "data/95_region.txt", sep = '\t', header = T)
+names(dtable) <- c('Chromosome', 'Start_Position', 'End_Position')
+kable(head(dtable))
+```
+
+[下载表格](data/95_region.txt)
+
+```
+其它窗口95%、99%置信水平下的候选区域，以及与该区域基因注释信息见交付结果文件夹“05./anno_all”。
+```
+
+# 候选区间SNP位点注释
+##  候选区域SNP位点统计
+
+根据在1M窗口95%置信区间下筛选得到的区域，选取位于这些区域的SNP位点；利用SnpEff[5]软件对这些SNP位点进行注释。
+
+<center>**候选区间SNP个数**</center>
+```{r echo = FALSE, results = 'asis'}
+library(knitr)
+dtable <- read.delim(file = "data/95_number.txt", sep = '\t', header = T)
+kable(dtable)
+```
+
+```
+Chrom:染色体名称; Num:在候选区间的SNP数目
+```
+
+## 候选区间SNP位点注释结果统计
+使用SnpEff软件分别对候选区间SNP位点进行注释，注释结果如下：
+
+<center>**SNP注释结果**</center>
+
+```{r echo = FALSE}
+library(knitr)
+dtable <- read.delim(file = "data/snp_stat.txt", sep = '\t', header = F)
+names(dtable) <- c('Type','Number',	'Impace')
+kable(dtable)
+```
+
+```
+Type:SNP变异类型；
+Number：该变异类型的SNP数目；
+Impace：变异类型的影响；
+```
+
+SnpEff软件基于SNP位点所处的位置，按照变异对氨基酸编码序列结构影响程度划分为: High、Moderate、Low、Modifier。High指对氨基酸编码序列影响较大的变异，可能造成蛋白质结构破坏、功能丢失等；Moderate指非破坏性变异，可能改变蛋白质的功能；Low指大部分无害的、不大可能改变氨基酸序列的变异；Modifier通常不影响编码基因，详细Type类型请参考：http://snpeff.sourceforge.net/SnpEff_manual.html#input
+
+根据变异对编码序列影响程度，挑选导致编码区发生错义突变，影响起始或终止密码子突变以及造成剪切位点区域变异的类型作为候选基因。
+
+<center>**候选基因突变类型（部分）**</center>
+```{r echo = FALSE}
+library(knitr)
+dtable <- read.delim(file = "data/simply.info.xls", sep = '\t', header = T)
+kable(head(dtable, n=10))
+```
+
+[下载表格](data/simply.info.xls)
+
+```
+Chr: 染色体
+Pos: 染色体位置；
+Window: 候选区间的范围；
+Gene_name和Type: SNP位点对该基因造成的变异类型；
+Nucleotide_change: 核酸水平变异类型;
+Amino_Acid_Change: 氨基酸水平变异类型; 
+之后的列是不同数据库的注释信息。
+```
+
+# 候选区域INDEL位点注释
+## 候选区域INDEL位点统计
+INDELJ检测方法与SNP检测方法一致。根据在1M窗口95%置信区间下筛选得到的区域，选取位于这些区域的INDEL位点；利用SnpEff[5]软件对这些SNP位点进行注释。
+
+
+<center>**候选区间INDEL个数**</center>
+```{r echo = FALSE, results = 'asis'}
+library(knitr)
+dtable <- read.delim(file = "data/95_indel_number.txt", sep = '\t', header = T)
+kable(dtable)
+```
+
+```
+Chrom:染色体名称; Num:在候选区间的INDEL数目
+```
+
+## 候选区间INDEL位点注释
+利用SnpEff[5]软件对候选区间的INDEL位点进行注释。注释结果统计如下表：
+
+<center>**候选区间INDEL注释结果统计</center>
+```{r echo=FALSE, results = 'asis'}
+library(knitr)
+dtable <- read.delim(file = "data/indel_stat.txt", sep = '\t', header = F)
+names(dtable) <- c('Type','Number',	'Impace')
+kable(dtable)
+```
+
+```
+Type: SNP变异类型；
+Number：该变异类型的SNP数目；
+Impace：变异类型的影响.
+```
+
+SnpEff软件基于SNP位点所处的位置，按照变异对氨基酸编码序列结构影响程度划分为: High、Moderate、Low、Modifier。High指对氨基酸编码序列影响较大的变异，可能造成蛋白质结构破坏、功能丢失等；Moderate指非破坏性变异，可能改变蛋白质的功能；Low指大部分无害的、不大可能改变氨基酸序列的变异；Modifier通常是非编变异或变异不影响编码基因，详细Type类型请参考：http://snpeff.sourceforge.net/SnpEff_manual.html#input
+
+<center>**候选区间INDEL注释(部分)**</center>
+```{r echo = FALSE, results = 'asis'}
+library(knitr)
+dtable <- read.delim(file = "data/indel_simply.info.xls", sep = '\t', header = T, check.names=F)
+kable(head(dtable))
+```
+
+[下载表格](data/data/indel_simply.info.xls)
+
+```
+Chr: 染色体
+Pos: 染色体位置；
+Window: 候选区间的范围；
+Gene_name和Type: SNP位点对该基因造成的变异类型；
+Nucleotide_change: 核酸水平变异类型;
+Amino_Acid_Change: 氨基酸水平变异类型; 
+之后的列是不同数据库的注释信息。
+```
+
+# 软件版本
+```{r echo = FALSE, results = 'asis'}
+library(knitr)
+dtable <- read.delim(file = "include/software.txt", sep = '\t', header = T, check.names=F)
+kable(dtable)
+```
+
+# 参考文献  
+[1] Takagi H, Abe A , et al. QTL-seq: rapid mapping of quantitative trait loci in rice by whole genome resequencing of DNA from two bulked populations[J]. The Plant Journal, 2013, 74(1): 174-183.  
+[2] Li, Heng, and Richard Durbin. "Fast and accurate short read alignment with Burrows–Wheeler transform." Bioinformatics 25.14 (2009): 1754-1760.  
+[3] Li, Heng, et al. The sequence alignment/map format and SAMtools."Bioinformatics 25.16 (2009): 2078-2079  
+[4] Kosugi, Shunichi, et al. "Coval: improving alignment quality and variant calling accuracy for next-generation sequencing data." PloS one 8.10 (2013): e75402  
+[5] Cingolani, Pablo, et al. "A program for annotating and predicting the effects of single nucleotide polymorphisms, SNPEff: SNPs in the genome of Drosophila melanogaster strain w1118; iso-2; iso-3." Fly 6.2 (2012): 80-92  
+[6] Langmead B. Aligning short sequencing reads with Bowtie[J]. Current Protocols in Bioinformatics, 2010, Chapter 11(Unit 11.17):Unit 11.7.  
+
+---
+![](include/logo.png)
+
+客 服 电 话：027-6243 5310
+
+客 服 邮 箱：service@benagen.com
+
+公 司 网 站：http://www.benagen.com
+
+公 司 地 址：武汉市东湖新技术开发区武大科技园宏业楼二楼
