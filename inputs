@@ -1,0 +1,12 @@
+###  注释
+###  注释
+###  注释
+
+GENOME=/data/user/niexiaoqing/TEST/genome/assembly.fa            ##参考基因组路径
+FASTQ=/data/user/niexiaoqing/TEST/fastq/                         ## 原始reads路径                                                     
+GFF=/data/user/niexiaoqing/TEST/gff/assembly.gff                  # gff文件路径          
+R_suffix1=                                                         # raw reads1 后缀                     
+R_suffix2=                                                         # raw reads2 后缀         
+separation=_                                                        ##clean reads 与后缀的分隔符
+C_suffix1=                                                        #clean reads 1后缀                                                                            
+C_suffix2=                                                        #clean reads 2后缀 

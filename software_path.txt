@@ -1,0 +1,17 @@
+#!/bin/bash
+
+adapter1="AATGATACGGCGACCACCGAGATCTACACTCGTCGGCAGCGTCAGATGTGTATAAGAGACAG"
+adapter2="CTGTCTCTTATACACATCTCCGAGCCCACGAGACATCTCGTATGCCGTCTTCTGCTTG"
+
+fastqc=/data/biosoft/FastQC/fastqc
+soapnuke=/data/user/benagen/biosoft/SOAPnuke-SOAPnuke2.1.0/SOAPnuke
+bwa=/home/benagen/anaconda3/pkgs/bwa-0.7.17-hed695b0_7/bin/bwa
+samtools=/data/biosoft/samtools-1.10/samtools
+#trimmomatic=/data/biosoft/trimmomatic/classes
+picard=/data/biosoft/picard/picard.jar
+gatk=/data/biosoft/gatk-4.1.4.1/gatk
+create_dict=/data/biosoft/picard/CreateSequenceDictionary.jar
+gatk3=/data/biosoft/gatk_3.8.0/GenomeAnalysisTK.jar
+snpeff=/data/user/niexiaoqing/tools/snpEff/snpEff.jar
+cnvnator=/data/biosoft/CNVnator_v0.3.3/src/cnvnator
+iTools=/data/user/niexiaoqing/bin/iTools

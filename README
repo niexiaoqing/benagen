@@ -1,0 +1,4 @@
+get_tables.py   获取三个表格(重测序报告所需)   snp_stat.txt  var_class.txt  affect_var.txt
+filter_cnv.py   处理重测序项目  将07.cnv目录下的*.cnv转换成*.set.cnv
+
+
