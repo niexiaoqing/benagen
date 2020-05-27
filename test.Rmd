@@ -1,0 +1,237 @@
+---
+title: "贝纳基因" 
+output: 
+  html_document:
+    toc: true
+    toc_float: true
+    number_sections: true
+---
+
+<style>
+ul{
+list-style: none;
+}
+p {
+	margin: 10 10px;
+	clear: both
+	font-family: "微软雅黑","仿宋",sans-serif;/*若电脑不支持微软雅黑，则用仿宋，若不支持仿宋，则在sans-serif中找*/
+	font-size: 130%;
+	opacity: 0.8;/*字体的透明度：1：默认样式，0：全透明*/
+	word-break: break-all;
+	white-space: normal;
+	line-height:200%;
+	text-indent:2em;
+}
+table {
+		border-width: 1px;
+		border-collapse: collapse;
+		border:1px solid green;
+}
+
+table th {
+	border-width: 1px;
+	padding: 8px;
+	border-style: solid;
+	border-color: #666666;
+	background-color:#2F4F4F;
+	color:white;
+}
+table td {
+	border-width: 1px;
+	padding: 8px;
+	border-style: solid;
+	border-color: #666666;
+	background-color: #ffffff;
+</style>
+
+```{r global_options, echo=FALSE,error=FALSE, comment=NA,warning=FALSE, message=FALSE}
+library(knitr) 
+library(ggplot2)
+library(pander)
+library(DT)
+library(yaml)
+library(formattable)
+library(kableExtra)
+library(shiny)
+```
+
+<div class="caption  text-center">
+</div> 
+
+```{r echo = FALSE  }  
+table=read.csv("./outcome/info",header = T,sep='|',check.names=F, stringsAsFactors=F) 
+knitr::kable(table,format="html",table.attr = "class=\"table table-bordered\"", align="c")
+```
+# 项目背景
+```{r warning=FALSE,rownames.print=FALSE,echo = FALSE }
+con<-yaml.load_file('./outcome/project')
+
+ref<-con$reference
+sample<-con$samples
+my_img<-con$my_img
+Creads<-con$Creads
+Rreads<-con$Rreads
+```
+<p>项目类型：细菌重测序分析。</p>
+<p>参考基因组：`r ref`。</p>
+<p>样品名：`r sample`。</p>
+
+# 生信分析
+<p>生信分析流程如图1所示：首先过滤Illumina的下机数据(raw reads)，得到clean reads，同时评估数据质量；随后比对基因组；再寻找SNP和Indel位点，并对SNP和Indel进行注释，同时calling各样本的CNV，并注释。</p>
+<div class="thumbnail">  
+<img alt="300x200" src="my_fixed/pipline.png" />  
+<div class="caption  text-center">
+<h5>图1 重测序分析流程程</h5>
+</div>  
+</div> 
+
+# 结果
+## 数据过滤
+### 过滤标准及过滤后质量
+<p>采用SOAPnuke<sup>[1]</sup>(版本：2.1.0，参数：-l 20 -q 0.1)过滤Illumina的下机数据(raw reads)，得到clean reads。其过滤标准如下：</p>
+<p>1)碱基质量低于20的比率高于10%全部去除；</p>
+<p>2)去除N大于0.05%的序列；</p>
+<p>用FastQC<sup>[2]</sup>(版本：0.11.5，参数默认)评价过滤后clean data质量，其所有结果在FastQC文件夹中展示，图2显示的是部分样本resds碱基质量统计结果，质量大于20就是比较好的过滤结果，可以用于后续分析。</p>
+<div class="thumbnail">  
+<!--<img alt="300x200" src="outcome/R1_base_quality.png" />-->
+`r my_img`
+<!--r warning=FALSE,rownames.print=FALSE,echo = FALSE }
+myimg<-yaml.load_file('./outcome/img')
+mimg<myimg$my_img-->
+<div class="caption  text-center">
+<h5>图2 部分样本resds碱基质量统计</h5>
+</div>  
+</div> 
+<p>注：由于展示原因，仅展示部分样品的碱基质量分布图，其余见交付数据。</p>
+### 测序数据量统计
+<p>表1展示所有样品的数据统计结果，共得到`r Rreads`Gb Raw Bases，过滤后得到`r Creads`Gb Clean Bases。</p>
+<div class="caption  text-center">
+<h5>表1 测序数据量统计</h5>
+</div> 
+```{r echo = FALSE  }  
+table=read.csv("./outcome/seq.stat", header = T,sep='\t',check.names=F, stringsAsFactors=F) 
+knitr::kable(table,format="html",table.attr = "class=\"table table-bordered\"", align="c")
+```
+<pre>
+注：
+Sample：样品编号；
+Raw paired reads：测序得到的成对reads条数；
+Raw bases：序列总碱基数；
+Clean paired reads：过滤后成对reads条数；
+Clean bases ：过滤后序列总碱基数；
+Q20：碱基质量大于Q20的比率。
+</pre>
+
+## 数据比对结果
+<p>将测序数据比对上参考基因组，比对结果如表2所示。</p>
+<div class="caption  text-center">
+<h5>表2 数据比对结果统计</h5>
+</div> 
+```{r echo = FALSE  }  
+table=read.csv("./outcome/map.result", header = T,sep='\t',check.names=F, stringsAsFactors=F) 
+knitr::kable(table,format="html",table.attr = "class=\"table table-bordered\"", align="c")
+```
+<pre>
+注：
+Sample：样品名；
+Clean paired reads：过滤后成对reads条数；
+Overall alignment rate：reads比对到参考基因组的比对率；
+Depth：测序深度；
+Coverage rate：序列覆盖度。
+</pre>
+
+## SNP和Indel结果统计
+<p>基于bam文件，使用GATK<sup>[3]</sup>(版本：4.0.7.0，参数：HaplotypeCaller)进行变异检测，由于细菌的SNP和Indel的结果较少，所以不过滤数据，保留所有结果(04.snp_indel/ all.gatk.vcf)。vcf的各项意义可以参考https://www.internationalgenome.org/wiki/Analysis/variant-call-format,剔除无关信息后得到表3。
+<div class="caption  text-center">
+<h5>表3 变异检测结果(部分展示)</h5>
+</div> 
+```{r echo = FALSE  }  
+table=read.csv("./outcome/variation.result", header = T,sep='\t',check.names=F, stringsAsFactors=F) 
+knitr::kable(table,format="html",table.attr = "class=\"table table-bordered\"", align="c")
+```
+<pre>
+注：
+Chrom： 染色体编号；
+Pos：染色体位置；
+Ref：参考基因组基因型；
+Alt：样品基因型；
+从第五列开始，表示代表不同基因型的reads在该位点的覆盖深度。例如n1_n2表示该位点与参考基因组基因型一致的reads数(n1)与突变型reads数(n2)。
+</pre>
+
+## SNP和INDEL注释
+<p>采用SnpEFF<sup>[4]</sup>(版本：4.3，参数默认)注释的所有变异位点信息，(SnpEFF注释结果解读详见http://snpeff.sourceforge.net/SnpEff_manual.html) 。</p>
+<div class="thumbnail text-center">  
+<!-- <img alt="300x200" src="outcome/variation_site.png" />   -->
+<h5>表4 变异类型</h5>
+```{r echo = FALSE  }
+table=read.csv("./outcome/snp_stat.txt", header = T,sep='\t',check.names=F, stringsAsFactors=F)
+knitr::kable(table,format="html",table.attr = "class=\"table table-bordered\"", align="c")
+```
+<h5>表5 变异影响大小</h5>
+```{r echo = FALSE  }
+table=read.csv("./outcome/affect_var.txt", header = T,sep='\t',check.names=F, stringsAsFactors=F)
+knitr::kable(table,format="html",table.attr = "class=\"table table-bordered\"", align="c")
+```
+<pre>注：按照对变异对蛋白质结构影响程度把不同的影响类型划分为: HIGHT,MODERATE,LOW,MODIFIER；HIGHT指对改变氨基酸序列影响较大的变异，可能造成蛋白质结构破坏、功能丢失等；MODERATE指非破坏性变异，可能改变蛋白质的功能；LOW指大部分无害的、不大可能改变氨基酸序列的变异；MODIFIER通常是非编变异或变异不影响编码基因，对于该种变异较难预测，或者没有证据表明这种变异产生影响。(分类详细定义见http://snpeff.sourceforge.net/SnpEff_manual.html#input)</pre>
+<h5>表6 基于编码区功能分类统计</h5>
+```{r echo = FALSE  }
+table=read.csv("./outcome/var_class.txt", header = T,sep='\t',check.names=F, stringsAsFactors=F)
+knitr::kable(table,format="html",table.attr = "class=\"table table-bordered\"", align="c")
+```
+<pre>注：MISSENSE为变异对编码区产生影响，使氨基酸的种类和序列发生变化；NONSENSE为变异使编码区的一个密码子变为终止密码子，从而使肽链合成提前终止；SILENT为发生的变异不表达，对基因产物没有影响</pre>
+<div class="caption  text-center">
+</div>  
+</div> 
+<p>过滤掉downstream_gene_variant、upstream_gene_variant等突变后得到可能有意义的变异位点(all.filter.snpeff)，其部分信息见表7。</p>
+<div class="caption  text-center">
+<h5>表7 all.filter.snpeff的部分信息</h5>
+</div> 
+```{r echo = FALSE  }  
+table=read.csv("./outcome/all.filter.snpeff", header = T,sep='\t',check.names=F, stringsAsFactors=F) 
+knitr::kable(table,format="html",table.attr = "class=\"table table-bordered\"", align="c")
+```
+<pre>
+注：
+Chrom： 染色体编号；
+Pos：染色体位置；
+Ref：参考基因组基因型；
+Alt：样品基因型；
+Mutation_position_type：变异类型；
+Geneid：变异影响的Gene；
+Protein：变异导致的蛋白质改变。
+</pre>
+
+## CNV结果
+<p>采用CNVnator<sup>[6]</sup>(版本：0.3.3，参数默认)发现CNV(Copy number variation)变异。</p>
+<p>所有CNV结果都位于07.cnv/*.cnv中，整理后结果见表8。</p>
+<div class="caption  text-center">
+<h5>表8 CNV结果</h5>
+</div>
+```{r echo = FALSE  }  
+table=read.csv("./outcome/cnv.result", header = T,sep='\t',check.names=F, stringsAsFactors=F) 
+knitr::kable(table,format="html",table.attr = "class=\"table table-bordered\"", align="c")
+```
+<pre>
+注：
+Variation_type：变异类型；
+Pos：染色体位置；
+CNV_length：CNV变异长度；
+E-value：e值，越小越可靠。
+</pre>
+
+# 参考文献
+<p>[1] Chen Y， Chen Y， Shi C， et al. SOAPnuke: a MapReduce acceleration-supported software for integrated quality control and preprocessing of high-throughput sequencing data[J]. Gigascience， 2017， 7(1): gix120.</p>
+<p>[2] Andrews S. FastQC: a quality control tool for high throughput sequence data[J]. 2010.</p>
+<p>[3] McKenna A， Hanna M， Banks E， et al. The Genome Analysis Toolkit: a MapReduce framework for analyzing next-generation DNA sequencing data[J]. Genome research， 2010， 20(9): 1297-1303.</p>
+<p>[4] Cingolani P， Platts A， Wang L L， et al. A program for annotating and predicting the effects of single nucleotide polymorphisms， SnpEff: SNPs in the genome of Drosophila melanogaster strain w1118; iso-2; iso-3[J]. Fly， 2012， 6(2): 80-92.</p>
+<p>[5] Chen K， Wallis J W， McLellan M D， et al. BreakDancer: an algorithm for high-resolution mapping of genomic structural variation[J]. Nature methods， 2009， 6(9): 677.</p>
+<p>[6] Abyzov A， Urban A E， Snyder M， et al. CNVnator: an approach to discover， genotype， and characterize typical and atypical CNVs from family and population genome sequencing[J]. Genome research， 2011， 21(6): 974-984.</p>
+
+# 结果说明
+```{r echo = FALSE  }  
+table=read.csv("./my_fixed/result_file", header = T,sep='\t',check.names=F, stringsAsFactors=F) 
+knitr::kable(table,format="html",table.attr = "class=\"table table-bordered\"", align="c")
+```
+
+# Analyse method
+<p>Raw reads was filtered using soapnuke(version: ：2.1.0; paramaters：-l 20, -q 0.1). After clean reads was obtained, map those clean reads to reference genome (assembly.fa) by bwa(version:0.7.17, paramaters：mem) and then remove PCR duplicate by samtools(version:1.9,default parameters). We use gatk(version: 4.0.7.0; parameters：HaplotypeCaller) to call snps. and cnvnator(version:0.3.3, default parameters) was used to find cnvs and a bin is specified to be 50bp length. After snp and indels was obtained, use snpeff(version：4.3;default parameters) to annotate snps and indels based on assembly.fa(reference genome file) and assembly.gff(genome annotation file) . </p>
